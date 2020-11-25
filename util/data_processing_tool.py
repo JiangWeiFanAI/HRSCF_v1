@@ -73,6 +73,15 @@ def read_barra_data_fc_get_lat_lon(root_dir,date_time):
     data.close()
     return var,lats,lons
 
+def read_SILO_data(root_dir,date_time):
+    filename=root_dir+(date_time).strftime("%Y%m%d")+".nc"
+#     filename=root_dir+(date_time+timedelta(1)).strftime("%Y%m%d")+".nc"
+    data = Dataset(filename, 'r')
+#     print(data)# lat(324), lon(432)
+    var = data["SILO"][:]
+    data.close()
+    return var
+
 def read_access_data(root_dir,en,date_time,leading,var_name="pr"):
     filename=root_dir+var_name+"/daily/"+en+"/"+"da_"+var_name+"_"+date_time.strftime("%Y%m%d")+"_"+en+".nc"
     data = Dataset(filename, 'r')
@@ -126,16 +135,16 @@ def read_dem(filename):
     dem_np=np.squeeze(dem_np.transpose(1,2,0))
     return dem_np
 
-def add_lat_lon(data,domian=[112.9, 154.25, -43.7425, -9.0],xarray=True):
-    "data: is the something you want to add lat and lon, with first demenstion is lat,second dimention is lon,domain is DEM domain "
-    new_lon=np.linspace(domian[0],domian[1],data.shape[1])
-    new_lat=np.linspace(domian[2],domian[3],data.shape[0])
-    if xarray:
-        return xr.DataArray(data[:,:,0],coords=[new_lat,new_lon],dims=["lat","lon"])
-    else:
-        return data,new_lat,new_lon
+# def add_lat_lon(data,domian=[112.9, 154.25, -43.7425, -9.0],xarray=False):
+#     "data: is the something you want to add lat and lon, with first demenstion is lat,second dimention is lon,domain is DEM domain "
+#     new_lon=np.linspace(domian[0],domian[1],data.shape[1])
+#     new_lat=np.linspace(domian[2],domian[3],data.shape[0])
+#     if xarray:
+#         return xr.DataArray(data[:,:,0],coords=[new_lat,new_lon],dims=["lat","lon"])
+#     else:
+#         return data,new_lat,new_lon
     
-def add_lat_lon_data(data,domain=[112.9, 154.00, -43.7425, -9.0],xarray=True):
+def add_lat_lon_data(data,domain=[112.9, 154.00, -43.7425, -9.0],xarray=False):
     "data: is the something you want to add lat and lon, with first demenstion is lat,second dimention is lon,domain is DEM domain "
     new_lon=np.linspace(domain[0],domain[1],data.shape[1])
     new_lat=np.linspace(domain[2],domain[3],data.shape[0])
@@ -245,6 +254,85 @@ From the BARRA average netCDF, the mean prcp should be multiplied by 24*365
 
 
 
+def draw_aus_station(var,lat,lon,domain = [112.9, 154.25, -43.7425, -9.0], level="day" ,titles_on = True, title = "BARRA-R precipitation", colormap = prcp_colormap, cmap_label = "Precipitation (mm)",save=False,path=""):
+    """ basema_ploting .py
+This function takes a 2D data set of a variable from BARRA and maps the data on miller projection. 
+The map default span is longitude between 111E and 155E, and the span for latitudes is -45 to -30, this is SE Australia. 
+The colour scale is YlGnBu at 11 levels. 
+The levels specifed are suitable for annual rainfall totals for SE Australia. 
+From the BARRA average netCDF, the mean prcp should be multiplied by 24*365
+"""
+#    lats.sort() #this doesn't do anything for BARRA
+#    lons.sort() #this doesn't do anything for BARRA
+#     domain = [111.975, 156.275, -44.525, -9.975]#awap
+    from matplotlib.colors import ListedColormap, BoundaryNorm
+    from mpl_toolkits.basemap import Basemap
+    fig=plt.figure(dpi=100)
+    level=levels[level]
+    map = Basemap(projection = "mill", llcrnrlon = domain[0], llcrnrlat = domain[2], urcrnrlon = domain[1], urcrnrlat = domain[3], resolution = 'l')
+    map.drawcoastlines()
+    map.drawmapboundary()
+    map.drawparallels(np.arange(-90., 120., 10.),labels=[1,0,0,0])
+    map.drawmeridians(np.arange(-180.,180., 10.),labels=[0,0,0,1])
+    llons, llats = np.meshgrid(lon, lat) # 将维度按照 x,y 横向竖向
+#     print(lon.shape,llons.shape)
+    x,y = map(llons,llats)
+#     print(x.shape,y.shape)
+    
+    norm = BoundaryNorm(level, len(level)-1)
+    data=xr.DataArray(var,coords=[lat,lon],dims=["lat","lon"])
+#     cs = map.pcolormesh(x, y, data, norm = norm, cmap = colormap) 
+    data_station=np.zeros((50))
+    ref=np.load("../../../../crps/ref/50_0timewindow.npy")
+    ref=ref.mean(axis=0)
+    
+    
+    for i in range(30):
+
+        a=np.load("./save_vdsr_pr_best_test/lead_time"+str(i)+"_50station_my.npy")
+#     print(a.shape)
+        data_station+=a.mean(axis=0)
+    station_data=np.array(data_station)/30
+#     print(station_data)
+    station_data=1- np.array(station_data)/ref[i]
+    print(station_data)
+
+    for i,c in zip(station_50_index_hr.values(),station_data):
+        lons = []
+        lats = []
+        lats.append(i[0])
+        lons.append(i[1])
+        for idx,num in enumerate(levels["station"]):
+            if c<num:
+                station_point=station_color[idx]
+                break
+                
+        x, y = map(lons, lats)
+        map.scatter(x, y, marker='o',color=station_point)
+    
+    if titles_on:
+        # label with title, latitude, longitude, and colormap
+        
+        plt.title(title)
+        plt.grid()
+        plt.xlabel("\nLongitude")
+#         plt.ylabel("Latitude\n\n")
+#         cbar = plt.colorbar(ticks = levels["station"][:], shrink = 0.8, extend = "max",orientation='horizontal')
+#         cbar.ax.set_ylabel("SS_CRPS")
+#         cbar.ax.set_xticklabels(levels["station"])
+    if save:
+        plt.savefig(path)
+        pdf = PdfPages(path+'.pdf')
+        pdf.savefig()
+        pdf.close() 
+    else:
+        plt.show()
+    plt.cla()
+    plt.close("all")
+    
+    return
+
+
 def interp_dim_scale(x, scale,linspace=True):
     '''get the corresponding lat and lon'''
     x0, xlast = x[0], x[-1]
@@ -328,4 +416,22 @@ def interp_da_2d_shape(da, shape):
     # intialize a new dataarray
     return xr.DataArray(scaled_tensor, coords=[latnew, lonnew],
                  dims=da.dims)
+
+def list_all_files(rootdir):
+    import os
+    _files = []
+    list = os.listdir(rootdir) #列出文件夹下所有的目录与文件
+    for i in range(0,len(list)):
+        path = os.path.join(rootdir,list[i])
+        if os.path.isdir(path):
+            _files.extend(list_all_files(path))
+        if os.path.isfile(path):
+            _files.append(path)
+    return _files
+
+def mkdir(path):
+    import os
+    if not os.path.exists(path):
+        os.makedirs(path)
+    return path
 
