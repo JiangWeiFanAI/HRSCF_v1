@@ -135,6 +135,14 @@ def read_dem(filename):
     dem_np=np.squeeze(dem_np.transpose(1,2,0))
     return dem_np
 
+
+def date_range(start_date, end_date):
+    """This function takes a start date and an end date as datetime date objects.
+    It returns a list of dates for each date in order starting at the first date and ending with the last date"""
+    return [start_date + timedelta(x) for x in range((end_date - start_date).days + 1)]
+
+
+
 # def add_lat_lon(data,domian=[112.9, 154.25, -43.7425, -9.0],xarray=False):
 #     "data: is the something you want to add lat and lon, with first demenstion is lat,second dimention is lon,domain is DEM domain "
 #     new_lon=np.linspace(domian[0],domian[1],data.shape[1])
@@ -152,6 +160,9 @@ def add_lat_lon_data(data,domain=[112.9, 154.00, -43.7425, -9.0],xarray=False):
         return xr.DataArray(data,coords=[new_lat,new_lon],dims=["lat","lon"])
     else:
         return data,new_lat,new_lon
+
+    
+    
     
 def find_coordinate_acc_lat_lon(lat,lon, target):
     '''
